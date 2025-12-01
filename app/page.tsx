@@ -51,8 +51,12 @@ export default function Home() {
       })
 
       if (!respuesta.ok) {
-        const dataError = await respuesta.json()
-        throw new Error(dataError.detail || dataError.error || "Error en la simulación")
+        try {
+          const dataError = await respuesta.json()
+          throw new Error(dataError.error || "Error en la simulación")
+        } catch {
+          throw new Error(`Error del servidor: ${respuesta.status} ${respuesta.statusText}`)
+        }
       }
 
       const resultado: DatosSimulacion = await respuesta.json()
@@ -65,6 +69,7 @@ export default function Home() {
       }
 
       setError(mensajeError)
+      console.error("[v0] Error en simulación:", err)
     } finally {
       setCargando(false)
     }
