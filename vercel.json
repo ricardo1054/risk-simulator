@@ -1,11 +1,6 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "functions": {
-    "api/**/*.py": {
-      "runtime": "python3.11"
-    }
-  },
   "env": {
     "PYTHONUNBUFFERED": "1"
   }
