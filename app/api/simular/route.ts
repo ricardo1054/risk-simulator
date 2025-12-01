@@ -7,7 +7,7 @@ type Body = {
   simulaciones: number
 }
 
-// Normal N(0,1) con Box‑Muller
+// Normal N(0,1) con Box-Muller
 function gaussianRandom(): number {
   let u = 0
   let v = 0
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as Partial<Body>
     const { precio_actual, volatilidad, dias, simulaciones } = body
 
-    // Validaciones básicas
+    // Validaciones básicas (equivalentes a las de FastAPI)
     if (
       typeof precio_actual !== "number" ||
       typeof volatilidad !== "number" ||
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
       () => Array(pasosTiempo + 1).fill(valorBase),
     )
 
-    // Simulación tipo movimiento browniano geométrico
+    // Simulación tipo movimiento browniano geométrico (igual que en tu Python)
     for (let paso = 1; paso <= pasosTiempo; paso++) {
       for (let i = 0; i < numTrayectorias; i++) {
         const ruido = gaussianRandom()
@@ -131,6 +131,7 @@ export async function POST(req: NextRequest) {
     const var_95 = valorBase * Math.abs(pRiesgo)
     const var_percentaje = pRiesgo * 100
 
+    // 👀 Muy importante: la forma del JSON coincide EXACTAMENTE con DatosSimulacion
     return NextResponse.json({
       simulaciones: simulacionesArr,
       promedio,
@@ -151,7 +152,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Por si alguien entra con GET en el navegador
+// Para que GET muestre algo controlado (si alguien entra desde el navegador)
 export function GET() {
   return NextResponse.json(
     { error: "Usa POST para esta ruta" },
