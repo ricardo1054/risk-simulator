@@ -1,9 +1,21 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List
 import numpy as np
 
-app = FastAPI()
+app = FastAPI(
+    title="Motor de Análisis Estocástico Financiero",
+    description="Análisis de proyecciones de activos mediante métodos probabilísticos"
+)
+
+# Permitir acceso desde el frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 
 class ParametroEntrada(BaseModel):
     monto_inicial: float = Field(..., gt=0)
@@ -24,22 +36,19 @@ class SalidaAnalisis(BaseModel):
 
 def generar_movimientos_estocasticos(valor_base, volat, pasos_tiempo, num_trayectorias):
     vol_diaria = volat / 100 / np.sqrt(252)
-    tasa_interes = 0.0
     delta_tiempo = 1 / 252
-    
-    matriz_precios = np.ones((num_trayectorias, pasos_tiempo + 1)) * valor_base
-    
+    matriz = np.ones((num_trayectorias, pasos_tiempo + 1)) * valor_base
+
     for paso in range(1, pasos_tiempo + 1):
         ruido = np.random.standard_normal(num_trayectorias)
-        exponencial = (tasa_interes - 0.5 * vol_diaria**2) * delta_tiempo
-        gaussiano = vol_diaria * np.sqrt(delta_tiempo) * ruido
-        matriz_precios[:, paso] = matriz_precios[:, paso-1] * np.exp(exponencial + gaussiano)
-    
-    media = np.mean(matriz_precios, axis=0)
-    q_5 = np.percentile(matriz_precios, 5, axis=0)
-    q_95 = np.percentile(matriz_precios, 95, axis=0)
-    
-    return matriz_precios, media, q_5, q_95
+        matriz[:, paso] = matriz[:, paso - 1] * np.exp(
+            (-0.5 * vol_diaria**2) * delta_tiempo + vol_diaria * np.sqrt(delta_tiempo) * ruido
+        )
+
+    media = np.mean(matriz, axis=0)
+    q_5 = np.percentile(matriz, 5, axis=0)
+    q_95 = np.percentile(matriz, 95, axis=0)
+    return matriz, media, q_5, q_95
 
 def calcular_metrica_riesgo(valores_finales, valor_inicial):
     cambios_porcentuales = (valores_finales - valor_inicial) / valor_inicial
@@ -48,30 +57,16 @@ def calcular_metrica_riesgo(valores_finales, valor_inicial):
     porcentaje_riesgo = percentil_riesgo * 100
     return valor_en_riesgo, porcentaje_riesgo
 
-def validar_entrada(param):
-    if param.monto_inicial <= 0:
-        raise HTTPException(status_code=400, detail="Monto debe ser positivo")
-    if not (0 <= param.volatilidad_anual <= 200):
-        raise HTTPException(status_code=400, detail="Volatilidad debe estar 0-200%")
-    if not (1 <= param.horizonte_temporal <= 365):
-        raise HTTPException(status_code=400, detail="Horizonte debe estar 1-365 días")
-    if not (100 <= param.cantidad_iteraciones <= 10000):
-        raise HTTPException(status_code=400, detail="Iteraciones debe estar 100-10000")
-
 @app.post("/api/simular", response_model=SalidaAnalisis)
 async def ejecutar_analisis(entrada: ParametroEntrada):
-    validar_entrada(entrada)
-    
     matriz, media, q5, q95 = generar_movimientos_estocasticos(
         entrada.monto_inicial,
         entrada.volatilidad_anual,
         entrada.horizonte_temporal,
-        entrada.cantidad_iteraciones
+        entrada.cantidad_iteraciones,
     )
-    
     valores_fin = matriz[:, -1]
     riesgo_abs, riesgo_pct = calcular_metrica_riesgo(valores_fin, entrada.monto_inicial)
-    
     return SalidaAnalisis(
         trayectorias=matriz.tolist(),
         media_movil=media.tolist(),
@@ -81,5 +76,5 @@ async def ejecutar_analisis(entrada: ParametroEntrada):
         valor_terminal_minimo=float(np.min(valores_fin)),
         valor_terminal_maximo=float(np.max(valores_fin)),
         perdida_maxima_confianza_95=float(riesgo_abs),
-        perdida_porcentual=float(riesgo_pct)
+        perdida_porcentual=float(riesgo_pct),
     )
